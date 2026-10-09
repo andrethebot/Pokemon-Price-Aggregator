@@ -1,0 +1,16 @@
+{
+  "name": "pokemon-price-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Localhost lookup of recent sold prices for Pokemon cards on SNKRDUNK, eBay and Fanatics Collect.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "cheerio": "1.0.0"
+  }
+}

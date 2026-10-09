@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Card Price Check</title>
+  <style>
+    :root {
+      --bg: #f6f6f4; --panel: #fff; --text: #1b1b1b; --muted: #6b6b6b; --line: #e3e3df; --soft: #efefeb;
+      --accent: #2f5bea; --ok: #1f7a3d; --warn: #9a5b00; --bad: #b42318;
+      --auction: #8a4b00; --auction-bg: #fbecd6; --buynow: #1d5fbf; --buynow-bg: #e2ecfb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #141414; --panel: #1e1e1e; --text: #ececec; --muted: #9a9a9a; --line: #2e2e2e; --soft: #262626;
+        --accent: #7f9cff; --ok: #5fc27e; --warn: #e0a54a; --bad: #f07a6e;
+        --auction: #f2b866; --auction-bg: #3a2a14; --buynow: #8fb4ff; --buynow-bg: #1b2a45;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+    main { max-width: 1180px; margin: 0 auto; padding: 28px 16px 48px; }
+    h1 { font-size: 22px; margin: 0 0 16px; }
+    form { display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr auto; gap: 8px; }
+    input, select, button { font: inherit; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--text); min-width: 0; }
+    form button { background: var(--accent); color: #fff; border: 0; font-weight: 600; cursor: pointer; }
+    form button:disabled { opacity: .6; cursor: wait; }
+    @media (max-width: 720px) { form { grid-template-columns: 1fr 1fr; } form input:first-child, form button { grid-column: 1 / -1; } }
+
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 14px 0 0; }
+    #note { color: var(--muted); margin: 0; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; }
+    .seg { display: inline-flex; background: var(--soft); border-radius: 9px; padding: 3px; gap: 2px; }
+    .seg button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--muted); padding: 6px 12px; border-radius: 7px; cursor: pointer; }
+    .seg button[aria-pressed="true"] { background: var(--panel); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
+    .controls[hidden], .toolbar .controls:empty { display: none; }
+
+    #results { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; margin-top: 14px; }
+    .source { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+    .source h2 { font-size: 16px; margin: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .source h2 a { font-size: 13px; font-weight: 400; color: var(--accent); }
+    .tabs { display: flex; gap: 4px; margin: 10px 0 0; border-bottom: 1px solid var(--line); }
+    .tabs button { font: inherit; font-size: 13px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); padding: 6px 8px; margin-bottom: -1px; cursor: pointer; }
+    .tabs button[aria-selected="true"] { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
+    .tabs .count { font-variant-numeric: tabular-nums; opacity: .8; }
+    .stats { display: flex; gap: 18px; margin: 10px 0 0; flex-wrap: wrap; }
+    .stat { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .stat small { font-size: 12px; font-weight: 400; color: var(--muted); display: block; }
+    .msg { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+    .msg.blocked, .msg.error { color: var(--warn); }
+
+    ul { list-style: none; padding: 0; margin: 10px 0 0; }
+    li { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; align-items: center; }
+    li .badge { grid-row: span 2; align-self: start; margin-top: 1px; }
+    li .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); text-decoration: none; min-width: 0; }
+    li a.title:hover { text-decoration: underline; }
+    li .price { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+    li .meta { grid-column: 2 / 4; color: var(--muted); font-size: 12px; }
+    li .meta .soon { color: var(--bad); font-weight: 600; }
+    .badge { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .02em; padding: 2px 7px; border-radius: 999px; white-space: nowrap; width: 72px; text-align: center; }
+    .badge.auction { color: var(--auction); background: var(--auction-bg); }
+    .badge.buy_now { color: var(--buynow); background: var(--buynow-bg); }
+    .empty { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Card Price Check</h1>
+  <form id="search">
+    <input name="name" placeholder="Card name, e.g. Charizard" required autofocus>
+    <input name="set" placeholder="Set (optional)">
+    <input name="number" placeholder="Number, e.g. 4/102">
+    <select name="grade" aria-label="Grade">
+      <option value="">Any grade</option>
+      <option value="raw">Ungraded</option>
+      <option>PSA 10</option><option>PSA 9</option><option>PSA 8</option>
+      <option>BGS 10</option><option>BGS 9.5</option>
+      <option>CGC 10</option><option>CGC 9.5</option>
+    </select>
+    <button>Search</button>
+  </form>
+  <!-- Stage 2: a "Scan card" button will POST the photo to /api/identify and fill the fields above. -->
+  <div class="toolbar">
+    <p id="note"></p>
+    <div class="controls" id="controls" hidden>
+      <div class="seg" role="group" aria-label="Sale type" data-key="type">
+        <button type="button" data-value="all" aria-pressed="true">All</button>
+        <button type="button" data-value="auction" aria-pressed="false">Auction</button>
+        <button type="button" data-value="buy_now" aria-pressed="false">Buy Now</button>
+      </div>
+      <div class="seg" role="group" aria-label="Sort current listings" data-key="sort">
+        <button type="button" data-value="price" aria-pressed="true">Lowest price</button>
+        <button type="button" data-value="ending" aria-pressed="false">Ending soonest</button>
+      </div>
+    </div>
+  </div>
+  <div id="results"></div>
+</main>
+<script>
+  const form = document.getElementById('search');
+  const note = document.getElementById('note');
+  const out = document.getElementById('results');
+  const controls = document.getElementById('controls');
+
+  // view.tab is per source: 'live' (for sale now) or 'sold'.
+  const view = { type: 'all', sort: 'price', tab: {} };
+  let data = null;
+
+  const TYPE_LABEL = { auction: 'Auction', buy_now: 'Buy Now' };
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const money = (n, cur) => {
+    try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: cur || 'USD', maximumFractionDigits: cur === 'JPY' ? 0 : 2 }).format(n); }
+    catch { return `${n} ${cur}`; }
+  };
+  const day = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' }) : '';
+  function timeLeft(iso) {
+    const ms = new Date(iso) - Date.now();
+    if (!iso || Number.isNaN(ms)) return '';
+    if (ms <= 0) return 'ended';
+    const m = Math.floor(ms / 60000), h = Math.floor(m / 60), d = Math.floor(h / 24);
+    return d ? `${d}d ${h % 24}h left` : h ? `${h}h ${m % 60}m left` : `${m}m left`;
+  }
+
+  // Most common currency, so yen and dollars are never mixed in one number.
+  function mainCurrency(rows) {
+    const counts = {};
+    rows.forEach((r) => (counts[r.currency] = (counts[r.currency] || 0) + 1));
+    return Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+  }
+  function median(nums) {
+    const p = [...nums].sort((a, b) => a - b), mid = p.length >> 1;
+    return p.length % 2 ? p[mid] : (p[mid - 1] + p[mid]) / 2;
+  }
+  const byType = (rows) => (view.type === 'all' ? rows : rows.filter((r) => r.type === view.type));
+
+  function sortListings(rows) {
+    const ends = (r) => (r.endsAt ? Date.parse(r.endsAt) : Infinity);
+    return [...rows].sort((a, b) => (view.sort === 'ending' ? ends(a) - ends(b) || a.price - b.price : a.price - b.price));
+  }
+
+  function badge(type) {
+    return type ? `<span class="badge ${esc(type)}">${esc(TYPE_LABEL[type] ?? type)}</span>` : '<span></span>';
+  }
+  function titleCell(r) {
+    const text = r.condition ? `${r.condition} · ${r.title}` : r.title;
+    return r.url
+      ? `<a class="title" href="${esc(r.url)}" target="_blank" rel="noopener" title="${esc(r.title)}">${esc(text)}</a>`
+      : `<span class="title">${esc(text)}</span>`;
+  }
+
+  function liveRow(r) {
+    const meta = [];
+    if (r.type === 'auction') {
+      meta.push(`${r.bids ?? 0} bid${r.bids === 1 ? '' : 's'}`);
+      const left = timeLeft(r.endsAt);
+      const soon = r.endsAt && Date.parse(r.endsAt) - Date.now() < 86400000;
+      if (left) meta.push(soon ? `<span class="soon">${esc(left)}</span>` : esc(left));
+    } else {
+      if (r.acceptsOffers) meta.push('Accepts offers');
+      if (r.listedAt) meta.push(`Listed ${esc(day(r.listedAt))}`);
+    }
+    return `<li>${badge(r.type)}${titleCell(r)}<span class="price">${esc(money(r.price, r.currency))}</span>
+      <span class="meta">${meta.join(' · ') || '&nbsp;'}</span></li>`;
+  }
+  function soldRow(r) {
+    return `<li>${badge(r.type)}${titleCell(r)}<span class="price">${esc(money(r.price, r.currency))}</span>
+      <span class="meta">Sold ${esc(day(r.soldAt))}</span></li>`;
+  }
+
+  function liveStats(rows) {
+    if (!rows.length) return '';
+    const bin = rows.filter((r) => r.type === 'buy_now');
+    const auc = rows.filter((r) => r.type === 'auction');
+    const stats = [];
+    if (bin.length) {
+      const cur = mainCurrency(bin);
+      const low = Math.min(...bin.filter((r) => r.currency === cur).map((r) => r.price));
+      stats.push(`<div class="stat">${money(low, cur)}<small>lowest Buy Now · ${bin.length} listed</small></div>`);
+    }
+    if (auc.length) {
+      const next = [...auc].sort((a, b) => Date.parse(a.endsAt || 0) - Date.parse(b.endsAt || 0))[0];
+      stats.push(`<div class="stat">${auc.length}<small>live auction${auc.length === 1 ? '' : 's'}${next.endsAt ? ` · next ends ${esc(timeLeft(next.endsAt).replace(' left', ''))}` : ''}</small></div>`);
+    }
+    return `<div class="stats">${stats.join('')}</div>`;
+  }
+  function soldStats(rows) {
+    if (!rows.length) return '';
+    const cur = mainCurrency(rows);
+    const prices = rows.filter((r) => r.currency === cur).map((r) => r.price);
+    return `<div class="stats"><div class="stat">${money(median(prices), cur)}<small>median of last ${prices.length} sales</small></div>
+      <div class="stat">${money(rows[0].price, rows[0].currency)}<small>latest · ${esc(day(rows[0].soldAt))}</small></div></div>`;
+  }
+
+  function renderSource(s, i) {
+    const live = sortListings(byType(s.listings));
+    const sold = byType(s.results);
+    const tab = view.tab[i] ?? (s.listings.length || !s.results.length ? 'live' : 'sold');
+    const link = s.searchUrl ? `<a href="${esc(s.searchUrl)}" target="_blank" rel="noopener">open site ↗</a>` : '';
+    const filtered = view.type !== 'all' ? ` ${TYPE_LABEL[view.type]}` : '';
+
+    let body;
+    if (tab === 'live') {
+      body = liveStats(live)
+        + (s.listingsMessage ? `<p class="msg">${esc(s.listingsMessage)}</p>` : '')
+        + (live.length ? `<ul>${live.map(liveRow).join('')}</ul>`
+           : s.listings.length ? `<p class="empty">No${filtered} listings right now.</p>`
+           : s.listingsMessage ? '' : '<p class="empty">Nothing for sale right now.</p>');
+    } else {
+      body = soldStats(sold)
+        + (s.message ? `<p class="msg ${esc(s.status)}">${esc(s.message)}</p>` : '')
+        + (sold.length ? `<ul>${sold.map(soldRow).join('')}</ul>`
+           : s.results.length ? `<p class="empty">No${filtered} sales in this list.</p>` : '');
+    }
+
+    return `<section class="source">
+      <h2>${esc(s.source)} ${link}</h2>
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" data-source="${i}" data-tab="live" aria-selected="${tab === 'live'}">For sale <span class="count">${live.length}</span></button>
+        <button type="button" role="tab" data-source="${i}" data-tab="sold" aria-selected="${tab === 'sold'}">Sold <span class="count">${sold.length}</span></button>
+      </div>
+      ${body}
+    </section>`;
+  }
+
+  function render() {
+    if (!data) return;
+    out.innerHTML = data.sources.map(renderSource).join('');
+  }
+
+  controls.addEventListener('click', (e) => {
+    const btn = e.target.closest('.seg button');
+    if (!btn) return;
+    const seg = btn.parentElement;
+    view[seg.dataset.key] = btn.dataset.value;
+    seg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b === btn));
+    render();
+  });
+
+  out.addEventListener('click', (e) => {
+    const btn = e.target.closest('.tabs button');
+    if (!btn) return;
+    view.tab[btn.dataset.source] = btn.dataset.tab;
+    render();
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const params = new URLSearchParams(new FormData(form));
+    const button = form.querySelector('button');
+    button.disabled = true;
+    note.textContent = 'Checking SNKRDUNK, eBay and Fanatics Collect…';
+    out.innerHTML = '';
+    view.tab = {};
+    try {
+      const res = await fetch(`/api/prices?${params}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      data = json;
+      note.textContent = `Results for “${data.query}”${data.grade ? `, ${data.grade === 'raw' ? 'ungraded' : data.grade}` : ''}.`;
+      controls.hidden = false;
+      render();
+    } catch (err) {
+      note.textContent = `Search failed: ${err.message}`;
+    } finally {
+      button.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
